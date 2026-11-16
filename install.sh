@@ -113,7 +113,14 @@ else
   git clone --quiet "$REPO_URL" "$DIR" && ok "Downloaded to $DIR"
 fi
 cd "$DIR"
-npm ci --no-audit --no-fund --loglevel=error
+# npm ci deletes node_modules before reinstalling; on macOS that can fail with ENOTEMPTY when Finder has
+# dropped .DS_Store files into it. Remove the folder ourselves first, and retry once if it still fails.
+install_deps() { rm -rf node_modules && npm ci --no-audit --no-fund --loglevel=error; }
+if ! install_deps; then
+  warn "Dependency install failed; retrying once with a clean folder"
+  sleep 2
+  install_deps || fail "npm couldn't install the dependencies. Run: cd \"$DIR\" && rm -rf node_modules && npm ci"
+fi
 ok "Dependencies installed"
 
 # ---------------------------------------------------------------- 5. HTTPS certificate
