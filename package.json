@@ -1,0 +1,32 @@
+{
+  "name": "tally-excel",
+  "version": "1.0.0",
+  "description": "Tally: a private AI agent for Microsoft Excel on Mac, running on a local Ollama model.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "start:http": "HTTP=1 node server.js",
+    "certs": "office-addin-dev-certs install --days 365",
+    "sideload": "mkdir -p ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef && rm -f ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/ollama-agent.xml && cp manifest.xml ~/Library/Containers/com.microsoft.Excel/Data/Documents/wef/tally.xml && echo 'Tally is registered. Restart Excel, then Home > Tally (or Insert > Add-ins > My Add-ins > Developer Add-ins).'",
+    "icons": "node scripts/make-icons.mjs",
+    "install-service": "sh scripts/install-service.sh",
+    "test:agent": "node scripts/test-agent.mjs",
+    "stt-model": "mkdir -p models && curl -L --fail -o models/ggml-large-v3-turbo-q5_0.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+    "bench": "node scripts/bench/run.mjs",
+    "bench:selftest": "node scripts/lib/mock-fidelity.mjs && node scripts/bench/oracle.mjs && node scripts/test-agent-loop.mjs && node scripts/test-fill-down.mjs && node scripts/test-describe.mjs",
+    "bench:hard": "node scripts/bench/run.mjs --suite hard"
+  },
+  "dependencies": {
+    "@microsoft/office-js": "^1.1.110",
+    "dompurify": "^3.2.6",
+    "marked": "^15.0.12",
+    "node-html-parser": "^7.1.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "hyperformula": "^3.5.0",
+    "office-addin-dev-certs": "^3.0.1"
+  },
+  "license": "MIT"
+}

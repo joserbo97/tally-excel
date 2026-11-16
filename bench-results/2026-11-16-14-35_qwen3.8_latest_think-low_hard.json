@@ -1,0 +1,305 @@
+{
+ "settings": {
+  "model": "qwen3.8:latest",
+  "think": "low",
+  "numCtx": 32768,
+  "temperature": 0.6,
+  "maxSteps": 30,
+  "approval": "none",
+  "web": false
+ },
+ "started": "2026-11-16T14:35:59.149Z",
+ "repeat": 5,
+ "results": [
+  {
+   "id": "hard-reconciliation",
+   "category": "hard",
+   "level": 3,
+   "status": "error",
+   "score": 0.2857142857142857,
+   "checks": [
+    {
+     "name": "Reconciliation sheet exists",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "finds T1012 amount mismatch",
+     "pass": false,
+     "detail": ""
+    },
+    {
+     "name": "finds T1028 missing from Bank",
+     "pass": false,
+     "detail": ""
+    },
+    {
+     "name": "finds T1061 missing from Ledger",
+     "pass": false,
+     "detail": ""
+    },
+    {
+     "name": "finds duplicate T1041",
+     "pass": false,
+     "detail": ""
+    },
+    {
+     "name": "no false discrepancies",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "reports 4 discrepancies",
+     "pass": false,
+     "detail": ""
+    }
+   ],
+   "seconds": 720,
+   "steps": 0,
+   "tool_calls": 10,
+   "tool_errors": 0,
+   "tokens_out": 0,
+   "error": "timed out after 12 min",
+   "unverifiable": [],
+   "answer": "",
+   "calls": [
+    {
+     "name": "get_workbook_info",
+     "args": "{}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"A1:C61\",\"sheet\":\"Ledger\"}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"A1:C62\",\"sheet\":\"Bank\"}"
+    },
+    {
+     "name": "manage_sheet",
+     "args": "{\"action\":\"add\",\"name\":\"Reconciliation\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"D1\",\"sheet\":\"Ledger\",\"values\":[[\"Discrepancy flag (1 = yes)\"]]}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"D2\",\"sheet\":\"Ledger\",\"values\":[[\"=IF(OR(COUNTIF(Bank!$A:$A,A2)=0,COUNTIF($A:$A,A2)>1,IFERROR(COUNTIFS(Bank!$A:$A,A2,Bank!$C:$C,C2),0)=0),1,0)\"]],\"fill_down_to_row\":61}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"E1\",\"sheet\":\"Bank\",\"values\":[[\"Discrepancy flag (1 = yes)\"]]}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"E2\",\"sheet\":\"Bank\",\"values\":[[\"=IF(OR(COUNTIF(Ledger!$A:$A,A2)=0,COUNTIF($A:$A,A2)>1,IFERROR(COUNTIFS(Ledger!$A:$A,A2,Ledger!$C:$C,C2),0)=0),1,0)\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"D2:D61\",\"sheet\":\"Ledger\"}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"E2:E62\",\"sheet\":\"Bank\"}"
+    }
+   ],
+   "empty_turns": [],
+   "thinking_cuts": 0,
+   "rep": 0
+  },
+  {
+   "id": "hard-reconciliation",
+   "category": "hard",
+   "level": 3,
+   "status": "error",
+   "score": 0.7142857142857143,
+   "checks": [
+    {
+     "name": "Reconciliation sheet exists",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "finds T1012 amount mismatch",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "finds T1028 missing from Bank",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "finds T1061 missing from Ledger",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "finds duplicate T1041",
+     "pass": true,
+     "detail": ""
+    },
+    {
+     "name": "no false discrepancies",
+     "pass": false,
+     "detail": "T1001,T1002,T1003,T1004,T1005,T1006"
+    },
+    {
+     "name": "reports 4 discrepancies",
+     "pass": false,
+     "detail": ""
+    }
+   ],
+   "seconds": 720,
+   "steps": 0,
+   "tool_calls": 34,
+   "tool_errors": 0,
+   "tokens_out": 0,
+   "error": "timed out after 12 min",
+   "unverifiable": [],
+   "answer": "",
+   "calls": [
+    {
+     "name": "get_workbook_info",
+     "args": "{}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Ledger!A1:C61\"}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Bank!A1:C62\"}"
+    },
+    {
+     "name": "manage_sheet",
+     "args": "{\"action\":\"add\",\"name\":\"Reconciliation\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"H1\",\"sheet\":\"Reconciliation\",\"values\":[[\"Union of Refs\",\"Ledger Count\",\"Bank Count\"],[\"=UNIQUE(VSTACK(Ledger!A2:A61,Bank!A2:A62))\",\"=COUNTIF(Ledger!$A$2:$A$61,H2)\",\"=COUNTIF(Bank!$A$2:$A$62,H2)\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "clear_range",
+     "args": "{\"address\":\"H1:J62\",\"sheet\":\"Reconciliation\",\"what\":\"all\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"H1\",\"sheet\":\"Reconciliation\",\"values\":[[\"Union of Refs\",\"Ledger Count\",\"Bank Count\"],[\"=UNIQUE(VSTACK(Ledger!A2:A61,Bank!A2:A62))\"]]}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"I2\",\"sheet\":\"Reconciliation\",\"values\":[[\"=COUNTIF(Ledger!$A$2:$A$61,H2)\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"J2\",\"sheet\":\"Reconciliation\",\"values\":[[\"=COUNTIF(Bank!$A$2:$A$62,H2)\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Reconciliation!H2:J62\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"K1\",\"sheet\":\"Reconciliation\",\"values\":[[\"Ledger Amount\",\"Bank Amount\",\"Mismatch\"]]}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"K2\",\"sheet\":\"Reconciliation\",\"values\":[[\"=IFERROR(XLOOKUP(H2,Ledger!$A$2:$A$61,Ledger!$C$2:$C$61),\\\"\\\")\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"L2\",\"sheet\":\"Reconciliation\",\"values\":[[\"=IFERROR(XLOOKUP(H2,Bank!$A$2:$A$62,Bank!$C$2:$C$62),\\\"\\\")\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"M2\",\"sheet\":\"Reconciliation\",\"values\":[[\"=IF(AND(I2=1,J2=1,K2<>L2),\\\"MISMATCH\\\",\\\"\\\")\"]],\"fill_down_to_row\":62}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Reconciliation!H13:M13\"}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Reconciliation!H29:M29\"}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Reconciliation!H42:M42\"}"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Reconciliation!H62:M62\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"A1\",\"sheet\":\"Reconciliation\",\"values\":\"[[\\\"Reconciliation — Ledger vs Bank (matched on Ref)\\\",\\\"\\\",\\\"\\\",\\\"\\\",\\\"\\\",\\\"\\\"],[[\\\"Ref\\\",\\\"Issue\\\",\\\"Ledger Amount\\\",\\\"Bank Amount\\\",\\\"Difference\\\",\\\"Note\\\"],[\\\"=H13\\\",\\\"Amount Mismatch\\\",\\\"=K13\\\",\\\"=L13\\\",\\\"=K13-L13\\\",\\\"Ledger is lower by \\\"&TEXT"
+    },
+    {
+     "name": "read_range",
+     "args": "{\"address\":\"Reconciliation!A1:F6\"}"
+    },
+    {
+     "name": "clear_range",
+     "args": "{\"address\":\"A1:F6\",\"sheet\":\"Reconciliation\",\"what\":\"all\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"A1\",\"sheet\":\"Reconciliation\",\"values\":\"[[\\\"Reconciliation — Ledger vs Bank (matched on Ref)\\\", \\\"\\\", \\\"\\\", \\\"\\\", \\\"\\\", \\\"\\\"], [\\\"Ref\\\", \\\"Issue\\\", \\\"Ledger Amount\\\", \\\"Bank Amount\\\", \\\"Difference\\\", \\\"Note\\\"], [\\\"=H13\\\", \\\"Amount Mismatch\\\", \\\"=K13\\\", \\\"=L13\\\", \\\"=K13-L13\\\", \\\"Ledger is "
+    },
+    {
+     "name": "clear_range",
+     "args": "{\"address\":\"A1:F6\",\"sheet\":\"Reconciliation\",\"what\":\"all\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"A1\",\"sheet\":\"Reconciliation\",\"values\":[[\"a\",\"b\"],[\"c\",\"d\"]]}"
+    },
+    {
+     "name": "clear_range",
+     "args": "{\"address\":\"A1:B2\",\"sheet\":\"Reconciliation\",\"what\":\"all\"}"
+    },
+    {
+     "name": "write_range",
+     "args": "{\"address\":\"A1\",\"sheet\":\"Reconciliation\",\"values\":[[\"Reconciliation — Ledger vs Bank (matched on Ref)\",\"\",\"\",\"\",\"\",\"\"],[\"Ref\",\"Issue\",\"Ledger Amount\",\"Bank Amount\",\"Difference\",\"Note\"],[\"=H13\",\"Amount Mismatch\",\"=K13\",\"=L13\",\"=K13-L13\",\"Ledger amount differs from Bank\"],[\"=H29\",\"Missing from Bank\",\""
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"A1\",\"sheet\":\"Reconciliation\",\"bold\":true,\"font_size\":14,\"font_color\":\"#1F4E79\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"A2:F2\",\"sheet\":\"Reconciliation\",\"bold\":true,\"fill_color\":\"#1F4E79\",\"font_color\":\"#FFFFFF\",\"horizontal_alignment\":\"Center\",\"borders\":\"all\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"A3:F6\",\"sheet\":\"Reconciliation\",\"borders\":\"all\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"C3:C6\",\"sheet\":\"Reconciliation\",\"number_format\":\"#,##0.00\",\"horizontal_alignment\":\"Right\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"D3:D6\",\"sheet\":\"Reconciliation\",\"number_format\":\"#,##0.00\",\"horizontal_alignment\":\"Right\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"E3:E6\",\"sheet\":\"Reconciliation\",\"number_format\":\"#,##0.00\",\"horizontal_alignment\":\"Right\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"A3:A6\",\"sheet\":\"Reconciliation\",\"horizontal_alignment\":\"Center\"}"
+    },
+    {
+     "name": "format_range",
+     "args": "{\"address\":\"B3:B6\",\"sheet\":\"Reconciliation\",\"horizontal_alignment\":\"Center\"}"
+    }
+   ],
+   "empty_turns": [],
+   "thinking_cuts": 0,
+   "rep": 1
+  }
+ ]
+}

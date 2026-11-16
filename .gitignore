@@ -1,0 +1,10 @@
+node_modules/
+models/
+.DS_Store
+*.log
+~$*
+
+# Third-party or scratch documents that can't be redistributed
+scripts/bench/fixtures/budget-deck.pptx
+sample-budget-deck.pptx
+sample-import-test.xlsx

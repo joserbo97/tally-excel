@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tally</title>
+  <!-- Office.js from the local server (works offline); Microsoft's CDN only if the local copy is missing. -->
+  <script src="vendor/office/office.js?v=1.1.110"
+    onerror="var s=document.createElement('script');s.src='https://appsforoffice.microsoft.com/lib/1/hosted/office.js';document.head.appendChild(s);"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="assets/icon-32.png" alt="" width="20" height="20" />
+      <span>Tally</span>
+      <span id="status" class="status" title="Ollama status"><i></i><b id="statusText">connecting…</b></span>
+    </div>
+    <div class="top-actions">
+      <button id="openChats" class="icon-btn" title="Chats in this workbook" aria-label="Chat history">
+        <svg viewBox="0 0 20 20"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6" /><path d="M3.5 3.5v3.2h3.2" /><path d="M10 6.5V10l2.4 1.6" /></svg>
+      </button>
+      <button id="newChat" class="icon-btn" title="New chat" aria-label="New chat">
+        <svg viewBox="0 0 20 20"><path d="M10 4v12M4 10h12" /></svg>
+      </button>
+      <button id="openSettings" class="icon-btn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 20 20"><path d="M3.5 6h1.5M9 6h7.5M3.5 14h7.5M15 14h1.5" /><circle cx="7" cy="6" r="2" /><circle cx="13" cy="14" r="2" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <section id="chatPanel" class="chat-panel" hidden>
+    <div class="chat-panel-head"><b id="chatPanelTitle">Chats in this workbook</b><button id="newChat2" class="link-btn">+ New chat</button></div>
+    <div id="chatList" class="chat-list"></div>
+  </section>
+
+  <section id="settings" class="settings" hidden>
+    <label>Model
+      <select id="model"></select>
+    </label>
+    <label>Thinking
+      <select id="think">
+        <option value="off">Off (fastest)</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="xhigh">High</option>
+      </select>
+    </label>
+    <label>Context window
+      <select id="numCtx">
+        <option value="16384">16K</option>
+        <option value="32768">32K</option>
+        <option value="65536">64K</option>
+        <option value="131072">128K</option>
+      </select>
+    </label>
+    <label>Ask before
+      <select id="approval">
+        <option value="destructive">Deleting / clearing / running code</option>
+        <option value="all">Any change to the workbook</option>
+        <option value="none">Never (full auto)</option>
+      </select>
+    </label>
+    <label>Temperature <span id="tempVal"></span>
+      <input id="temperature" type="range" min="0" max="1.2" step="0.1" />
+    </label>
+    <label class="check"><input id="web" type="checkbox" /> Allow web search &amp; page reading</label>
+    <label>Dictation language
+      <select id="sttLang">
+        <option value="auto">Auto-detect</option>
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="pt">Português</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+        <option value="ar">العربية</option>
+      </select>
+    </label>
+    <label class="check"><input id="sttAutoSend" type="checkbox" /> Send automatically after dictation</label>
+    <label class="check"><input id="ttsAuto" type="checkbox" /> Read replies aloud automatically</label>
+    <label>Voice
+      <select id="ttsVoice"><option value="auto">Auto (match reply language)</option></select>
+    </label>
+    <label>Speech rate <span id="ttsRateVal"></span>
+      <input id="ttsRate" type="range" min="120" max="300" step="10" />
+    </label>
+    <label>Max tool steps per message
+      <input id="maxSteps" type="number" min="1" max="100" />
+    </label>
+    <label class="check"><input id="showStats" type="checkbox" /> Show speed and token stats after each reply</label>
+    <p class="hint">Runs on your Mac via Ollama. Workbook data never leaves this computer; with web access on, only search queries and the pages the agent opens go online.</p>
+  </section>
+
+  <main id="messages" class="messages">
+    <div id="empty" class="empty">
+      <img src="assets/icon-128.png" alt="" width="56" height="56" />
+      <div id="legacyBanner" class="legacy" hidden>
+        <div>You have a conversation from before chats were kept per workbook (<span id="legacyTitle"></span>).</div>
+        <div class="legacy-btns"><button id="legacyMove" class="yes">Move it to this workbook</button><button id="legacyHide">Not here</button></div>
+      </div>
+      <h1>What should we do in this workbook?</h1>
+      <p>I can read, analyze, write formulas, format, build tables and charts — all locally with <b id="emptyModel">qwen3.8</b>.</p>
+      <div class="suggestions">
+        <button data-prompt="Give me a quick overview of this workbook: what's on each sheet and what looks important.">Summarize this workbook</button>
+        <button data-prompt="Explain the formulas in my selection in plain language, and flag anything that looks wrong.">Explain selected formulas</button>
+        <button data-prompt="Turn my selected data into a formatted table and add a chart that best shows it next to the data.">Table + chart from selection</button>
+        <button data-prompt="Create a new sheet 'Budget' with a monthly personal budget template: income, categories of expenses, totals and savings rate, using formulas.">Build a budget template</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="composer">
+    <div class="ctx"><span id="ctxChip" class="chip" title="The agent sees your current selection">No selection</span></div>
+    <div id="attachments" class="attachments" hidden></div>
+    <div class="input-row">
+      <button id="attach" class="mic" title="Attach images, PDFs, Word, Excel or PowerPoint files (or paste with ⌘V / drag & drop)" aria-label="Attach image, PDF, Word, Excel or PowerPoint file">
+        <svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2" /><circle cx="7.5" cy="8.5" r="1.4" /><path d="M3.5 14.5l4-4 3 3 2-2 4 4" /></svg>
+      </button>
+      <input id="fileInput" type="file" accept="image/*,application/pdf,.pdf,.docx,.doc,.rtf,.odt,.xlsx,.xlsm,.xlsb,.xls,.ods,.csv,.tsv,.pptx,.ppsx,.pptm,.ppt,.odp,.key,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" multiple hidden />
+      <textarea id="input" rows="1" placeholder="Ask about this workbook…"></textarea>
+      <button id="mic" class="mic" title="Dictate (local Whisper)" aria-label="Dictate">
+        <svg viewBox="0 0 20 20"><rect x="7.2" y="2.8" width="5.6" height="9.4" rx="2.8" /><path d="M4.6 9.6a5.4 5.4 0 0 0 10.8 0M10 15v2.4" /></svg>
+        <span class="level"></span>
+      </button>
+      <button id="send" class="send" title="Send (Enter)" aria-label="Send">
+        <svg viewBox="0 0 20 20"><path d="M4 10h11M10.5 5l5 5-5 5" /></svg>
+      </button>
+      <button id="stop" class="send stop" title="Stop" aria-label="Stop" hidden>
+        <svg viewBox="0 0 20 20"><rect x="5.5" y="5.5" width="9" height="9" rx="1.5" /></svg>
+      </button>
+    </div>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
