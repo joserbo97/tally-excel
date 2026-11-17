@@ -1,4 +1,4 @@
-// Local server for the Ollama Excel Agent add-in.
+// Local server for the Tally Excel add-in.
 // - Serves the task pane over HTTPS (Office requires HTTPS for add-in pages).
 // - Proxies /ollama/* to the local Ollama server, so the task pane never hits
 //   CORS or mixed-content (https page -> http Ollama) problems.
@@ -327,5 +327,5 @@ for (const host of ["127.0.0.1", "::1"]) {
     })
     .listen(PORT, host);
 }
-console.log(`Ollama Excel Agent running at ${USE_HTTP ? "http" : "https"}://localhost:${PORT}`);
+console.log(`Tally running at ${USE_HTTP ? "http" : "https"}://localhost:${PORT}`);
 console.log(`Proxying /ollama -> ${OLLAMA.origin}`);
