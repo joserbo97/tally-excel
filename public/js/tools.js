@@ -5,6 +5,7 @@
 //   run     - async (args, ctx) => result object (serialized back to the model)
 
 import { shiftFormulaRows } from "./formulas.js";
+import { findColumn, compareRows, issueText } from "./compare.js";
 
 const MAX_READ_CELLS = 3000;
 const MAX_FILL_ROWS = 100000;
@@ -564,6 +565,159 @@ const tools = {
         range.load("address");
         await context.sync();
         return { sorted: range.address, keys: fields };
+      });
+    },
+  },
+
+  compare_lists: {
+    risk: "write",
+    schema: {
+      description:
+        "Reconcile or compare two lists by a key column, e.g. ledger vs bank statement, invoices vs payments, this month's list vs last month's. Does all the matching in one step and writes a discrepancy report to a new sheet: keys missing from either side, values that differ (both values plus the difference), and duplicate keys. The report's values are live XLOOKUP formulas into the source sheets. Use this for any list matching or reconciliation instead of comparing rows by reading them or building COUNTIF/XLOOKUP helper columns yourself. Both ranges need a header row. Afterwards, report the counts it returns.",
+      parameters: {
+        type: "object",
+        properties: {
+          left: { type: "string", description: "First list including its header row. Prefer whole columns, e.g. 'Ledger!A:C'; a range that stops early is extended to the end of the list." },
+          right: { type: "string", description: "Second list including its header row, e.g. 'Bank!A:C'. Don't assume it has as many rows as the first list." },
+          key: { type: "string", description: "Header name (or column letter) of the column to match on, e.g. 'Ref'. Defaults to the first column. Use right_key if the second list names it differently." },
+          right_key: { type: "string", description: "Key column header in the second list, if different from `key`." },
+          compare: {
+            type: "array",
+            items: { type: "string" },
+            description: "Headers of the columns whose values must agree, e.g. ['Amount']. Defaults to every column with the same header on both sides (except the key).",
+          },
+          output_sheet: { type: "string", description: "Name for the new report sheet. Default 'Reconciliation'; a number is added if it already exists." },
+          left_label: { type: "string", description: "Name for the first list in the report. Defaults to its sheet name." },
+          right_label: { type: "string", description: "Name for the second list in the report. Defaults to its sheet name." },
+          tolerance: { type: "number", description: "Largest numeric difference treated as equal. Default 0.005." },
+        },
+        required: ["left", "right"],
+      },
+    },
+    async run(a, ctx) {
+      return Excel.run(async (context) => {
+        const readList = async (addr) => {
+          const { ws, range: requested } = getRange(context, "", addr);
+          const used = ws.getUsedRangeOrNullObject(true);
+          ws.load("name");
+          used.load("address");
+          await context.sync();
+          let range = used.isNullObject ? null : requested.getIntersectionOrNullObject(used);
+          if (range) range.load("values,rowIndex,columnIndex,rowCount,columnCount");
+          if (!used.isNullObject) used.load("rowIndex,rowCount");
+          await context.sync();
+          if (!range || range.isNullObject || range.rowCount < 2) throw new Error(`${addr} has no data rows under a header row.`);
+          // A list is the whole block: if rows right below the given range still hold data in its columns
+          // (e.g. a guessed 'Bank!A1:C61' when the bank has 62 rows), extend the range through them.
+          let extended = null;
+          const below = used.rowIndex + used.rowCount - (range.rowIndex + range.rowCount);
+          if (below > 0) {
+            const tail = range.getCell(range.rowCount - 1, 0).getOffsetRange(1, 0).getResizedRange(below - 1, range.columnCount - 1);
+            tail.load("values");
+            await context.sync();
+            let more = 0;
+            while (more < tail.values.length && tail.values[more].some((v) => v !== "" && v != null)) more++;
+            if (more) {
+              const from = range.address.split("!").pop();
+              range = range.getResizedRange(more, 0);
+              range.load("address,values,rowIndex,columnIndex,rowCount,columnCount");
+              await context.sync();
+              extended = `${ws.name}!${from} → ${range.address.split("!").pop()} (the list continues below the given range)`;
+            }
+          }
+          if (range.rowCount * range.columnCount > 200000) throw new Error(`${addr} is too large to compare (over 200,000 cells).`);
+          return { sheet: ws.name, values: range.values, rowIndex: range.rowIndex, columnIndex: range.columnIndex, rowCount: range.rowCount, extended };
+        };
+        const left = await readList(a.left);
+        const right = await readList(a.right);
+        const lh = left.values[0], rh = right.values[0];
+        const lk = a.key ? findColumn(lh, a.key, left.columnIndex) : 0;
+        const rk = a.right_key || a.key ? findColumn(rh, a.right_key || a.key, right.columnIndex) : 0;
+        if (lk < 0) return { error: `Key column "${a.key}" isn't in the header row of ${a.left}. Headers: ${lh.join(", ")}` };
+        if (rk < 0) return { error: `Key column "${a.right_key || a.key}" isn't in the header row of ${a.right}. Headers: ${rh.join(", ")}` };
+        let names = Array.isArray(a.compare) && a.compare.length ? a.compare.map(String)
+          : lh.filter((h, i) => i !== lk && String(h).trim() && findColumn(rh, h) > -1 && findColumn(rh, h) !== rk).map(String);
+        const fields = [];
+        for (const name of names) {
+          const l = findColumn(lh, name, left.columnIndex), r = findColumn(rh, name, right.columnIndex);
+          if (l < 0 || r < 0) return { error: `Column "${name}" isn't in both header rows. ${a.left}: ${lh.join(", ")}. ${a.right}: ${rh.join(", ")}` };
+          fields.push({ name: String(lh[l]).trim() || name, l, r });
+        }
+        const res = compareRows(left.values.slice(1), right.values.slice(1), { lk, rk, fields, tolerance: Number.isFinite(Number(a.tolerance)) ? Number(a.tolerance) : 0.005 });
+        let lName = a.left_label || left.sheet, rName = a.right_label || right.sheet;
+        if (lName === rName) { lName = a.left_label || "List 1"; rName = a.right_label || "List 2"; }
+
+        // New report sheet with a free name.
+        const base = String(a.output_sheet || "Reconciliation").slice(0, 28);
+        let outName = base;
+        for (let n = 2; ; n++) {
+          const probe = context.workbook.worksheets.getItemOrNullObject(outName);
+          probe.load("name");
+          await context.sync();
+          if (probe.isNullObject) break;
+          outName = `${base} ${n}`;
+        }
+        const out = context.workbook.worksheets.add(outName);
+
+        // Live lookups into the source lists: ='Bank'!$C$2:$C$62 style absolute ranges.
+        const ref = (list, col) => {
+          const q = `'${list.sheet.replace(/'/g, "''")}'!`;
+          const c = colLetter(list.columnIndex + col);
+          return `${q}$${c}$${list.rowIndex + 2}:$${c}$${list.rowIndex + list.rowCount}`;
+        };
+        const fieldOf = (name) => fields.find((f) => f.name === name);
+        const issues = res.issues.slice(0, 5000);
+        const rows = [[String(lh[lk]).trim() || "Key", "Issue", "Field", `${lName} value`, `${rName} value`, `Difference (${rName} − ${lName})`]];
+        issues.forEach((it, i) => {
+          const r = i + 2, f = fieldOf(it.field);
+          const look = (list, kc, vc) => `=XLOOKUP($A${r},${ref(list, kc)},${ref(list, vc)},"")`;
+          rows.push([
+            it.raw,
+            issueText(it, lName, rName),
+            it.field || "",
+            f ? look(left, lk, f.l) : "",
+            f ? look(right, rk, f.r) : "",
+            f ? `=IF(AND(ISNUMBER(D${r}),ISNUMBER(E${r})),E${r}-D${r},"")` : "",
+          ]);
+        });
+        if (!issues.length) rows.push(["", "No discrepancies", "", "", "", ""]);
+        const counts = {
+          [`missing from ${rName}`]: res.issues.filter((x) => x.type === "missing_right").length,
+          [`missing from ${lName}`]: res.issues.filter((x) => x.type === "missing_left").length,
+          value_mismatches: res.issues.filter((x) => x.type === "mismatch").length,
+          [`duplicates in ${lName}`]: res.issues.filter((x) => x.type === "duplicate_left").length,
+          [`duplicates in ${rName}`]: res.issues.filter((x) => x.type === "duplicate_right").length,
+        };
+        rows.push(["", "", "", "", "", ""]);
+        rows.push(["Discrepancies", res.issues.length, "", "", "", ""]);
+        rows.push(["Compared", `${res.left_keys} keys in ${lName}, ${res.right_keys} in ${rName}, ${res.matched_keys} on both`, "", "", "", ""]);
+        const now = new Date(); // local date: toISOString() is UTC and can be a day ahead in the evening
+        rows.push(["Checked", `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`, "", "", "", ""]);
+
+        const target = out.getRange("A1").getResizedRange(rows.length - 1, 5);
+        target.load("address,formulas");
+        await context.sync();
+        ctx?.undo?.push({ sheet: outName, address: target.address.split("!").pop(), formulas: target.formulas });
+        target.formulas = rows;
+        const header = out.getRange("A1:F1");
+        header.format.font.bold = true;
+        header.format.fill.color = "#E7F0EC";
+        if (issues.length) out.getRange(`D2:F${issues.length + 1}`).numberFormat = Array.from({ length: issues.length }, () => ["#,##0.00", "#,##0.00", "#,##0.00"]);
+        out.getRange(`A${rows.length - 2}`).format.font.bold = true;
+        target.format.autofitColumns();
+        out.activate();
+        target.load("address");
+        await context.sync();
+        return {
+          written: target.address,
+          report_sheet: outName,
+          discrepancies: res.issues.length,
+          counts,
+          compared: { [lName]: res.left_keys, [rName]: res.right_keys, on_both: res.matched_keys, fields: fields.map((f) => f.name) },
+          items: res.issues.slice(0, 40).map((x) => [x.raw, issueText(x, lName, rName), x.left, x.right]),
+          ...([left.extended, right.extended].some(Boolean) ? { ranges_extended: [left.extended, right.extended].filter(Boolean) } : {}),
+          ...(res.issues.length > 40 ? { note: `Showing the first 40 of ${res.issues.length}; all are on ${outName}.` } : {}),
+        };
       });
     },
   },

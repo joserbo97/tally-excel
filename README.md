@@ -32,7 +32,7 @@ The installer checks your Mac first, then:
 
 Then **quit Excel completely and open it again**. **Tally** appears at the right end of the Home tab. If it doesn't, go to Insert → Add-ins → My Add-ins → Developer Add-ins.
 
-Options: `bash -s -- --check` only checks your Mac and changes nothing; `--with-dictation` also sets up local voice dictation (about 600 MB more). Running the installer again updates Tally and skips anything already done. To install somewhere else, set `TALLY_DIR`; to try another Ollama model with tool support, set `TALLY_MODEL`.
+Options: `bash -s -- --check` only checks your Mac and lists what the install would set up, changing nothing; `--with-dictation` also sets up local voice dictation (about 600 MB more). Running the installer again updates Tally and skips anything already done. To install somewhere else, set `TALLY_DIR`; to try another Ollama model with tool support, set `TALLY_MODEL`.
 
 Prefer to do it by hand? Clone this repository and run `./install.sh` from it, or follow the steps in [Manual setup](#manual-setup).
 
@@ -186,6 +186,7 @@ For much more natural voices, download an *Enhanced* or *Premium* voice in Syste
 | `manage_sheet` | add / rename / copy / delete / activate sheets |
 | `insert_delete_cells` | insert/delete rows, columns or blocks |
 | `create_table`, `create_chart`, `sort_range` | Excel tables, charts, sorting |
+| `compare_lists` | reconcile two lists by a key (ledger vs bank, invoices vs payments): writes a report sheet of missing keys, value differences and duplicates, with live XLOOKUP amounts |
 | `find_cells`, `select_range` | search the workbook; navigate the user to a range |
 | `execute_office_js` | escape hatch: arbitrary Office.js (conditional formatting, validation, freeze panes…) |
 

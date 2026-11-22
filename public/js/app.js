@@ -225,6 +225,7 @@ function toolLabel(name, a) {
     case "create_table": return `<b>Create table</b>${where}`;
     case "create_chart": return `<b>Create ${esc(a.type || "")} chart</b>${where}`;
     case "sort_range": return `<b>Sort</b>${where}`;
+    case "compare_lists": return `<b>Compare</b> ${esc(a.left || "")} with ${esc(a.right || "")}${a.address ? " →" + where : ""}`;
     case "find_cells": return `<b>Search</b> “${esc(a.query || "")}”`;
     case "select_range": return `<b>Select</b>${where}`;
     case "execute_office_js": return `<b>Run Office.js</b> ${esc(a.explanation || "")}`;

@@ -246,6 +246,11 @@ const VARIANTS = [
     await W("A1", [["Ref", "Issue"], ["T1012", "Amount mismatch: 3,716.03 vs 3,806.03"], ["T1028", "Missing from Bank"], ["T1061", "Missing from Ledger"], ["T1041", "Duplicate in Bank"]], "Reconciliation");
     return "I found 4 discrepancies.";
   }],
+  // The compare_lists tool's own report sheet.
+  ["hard-reconciliation", "compare_lists tool", async () => {
+    const r = await T("compare_lists", { left: "Ledger!A:C", right: "Bank!A:C", key: "Ref", compare: ["Amount"] });
+    return `I found ${r.discrepancies} discrepancies.`;
+  }],
 ];
 
 // Wrong answers the checker must reject (a checker that passes these is too lenient).

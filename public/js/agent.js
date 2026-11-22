@@ -6,7 +6,8 @@ import { forModel } from "./chats.js";
 const API = globalThis.OLLAMA_API_BASE || "/ollama/api";
 
 export function systemPrompt() {
-  const today = new Date().toISOString().slice(0, 10);
+  const d = new Date(); // local date; toISOString() is UTC and can be a day ahead in the evening
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return `You are an expert Excel analyst and builder working inside Microsoft Excel as a side-panel agent. You run fully locally. Today is ${today}.
 
 You act on the user's open workbook through tools. Work like a careful senior analyst:

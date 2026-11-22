@@ -59,6 +59,8 @@ export function describeApproval(name, args = {}) {
       if (act === "rename") return { text: `Rename the sheet ${sheet}${args.new_name ? ` to "${args.new_name}"` : ""}.`, undo: "Undo can't reverse this.", yes: "Rename sheet", no: "Don't rename" };
       return { text: `${act[0].toUpperCase() + act.slice(1)} the sheet ${sheet}.`, undo: "Undo can't reverse this.", yes: "Allow", no: "Don't allow" };
     }
+    case "compare_lists":
+      return { text: `Compare ${args.left || "the first list"} with ${args.right || "the second list"} and write the differences to a new sheet${args.output_sheet ? ` "${args.output_sheet}"` : ""}.`, undo: "Undo clears the report; the new sheet stays.", yes: "Compare", no: "Don't compare" };
     case "sort_range":
       return { text: `Sort ${cellsIn(args)}.`, undo: "Undo can't reverse a sort.", yes: "Sort", no: "Don't sort" };
     case "format_range":
