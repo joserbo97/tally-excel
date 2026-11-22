@@ -310,6 +310,12 @@ function toolCard(container, name, args, result) {
       out.textContent = s.length > 4000 ? s.slice(0, 4000) + "\n…" : s;
       card.append(out);
       if (failed) card.title = res.error;
+      const n = res?.replaced_cells?.count;
+      if (n) {
+        const shown = res.replaced_cells.cells.map((c) => `${c.cell} (was ${String(c.was).slice(0, 30)})`).join(", ");
+        const note = el("div", "tool-note", esc(`Replaced ${n} cell${n > 1 ? "s" : ""} that had content: ${shown}${n > res.replaced_cells.cells.length ? ", …" : ""}`));
+        card.after(note); // outside the <details>, so it shows while the card is collapsed
+      }
     },
     // Asks in plain words what will happen and whether Undo covers it. The raw arguments stay in the
     // (collapsed) card above, for anyone who wants the details.

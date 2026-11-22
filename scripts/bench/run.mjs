@@ -37,6 +37,7 @@ const settings = {
   maxSteps: Number(args.steps || 30),
   approval: "none",
   web: false, // keep runs deterministic and offline
+  quickFirstStep: !!args["quick-first"],
 };
 const repeat = Number(args.repeat || 1);
 const TIMEOUT_MS = Number(args.timeout || 8) * 60 * 1000;
@@ -106,12 +107,15 @@ async function runTask(task, fixtures) {
   const history = [{ role: "user", content: messages.userContent({ ctxLine, text: task.prompt, docs }) }];
   const calls = [];
   const emptyTurns = [];
+  let firstAction = null, thinkChars = 0;
   let toolErrors = 0;
   const ui = {
     step: () => ({
-      thinking() {}, content() {}, done() {},
+      _t: 0,
+      thinking(t) { this._t = t.length; }, content() {}, done() { thinkChars += this._t; this._t = 0; },
       empty: (info) => emptyTurns.push(info),
       toolStart: (name, a) => {
+        firstAction ??= (Date.now() - t0) / 1000;
         const rec = { name, args: JSON.stringify(a).slice(0, 300) };
         calls.push(rec);
         return { approve: async () => true, end: (res) => { if (res?.error) { toolErrors++; rec.error = String(res.error).slice(0, 200); } } };
@@ -120,9 +124,9 @@ async function runTask(task, fixtures) {
     stats: (s) => Object.assign(stats, s),
   };
   const stats = {};
+  const t0 = Date.now();
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
-  const t0 = Date.now();
   let answer = "", crashed = null;
   try {
     answer = await runTurn({ history, settings, signal: ctl.signal, ui, undo: [] });
@@ -153,7 +157,7 @@ async function runTask(task, fixtures) {
   let status = crashed ? "error" : passed === checks.length ? "pass" : unverifiable.length ? "unverifiable" : "fail";
   return {
     id: task.id, category: task.category, level: task.level, status, score: passed / checks.length,
-    checks, seconds: Math.round(seconds), steps: stats.steps || 0, tool_calls: calls.length, tool_errors: toolErrors,
+    checks, seconds: Math.round(seconds), first_action_s: firstAction == null ? null : Math.round(firstAction * 10) / 10, think_chars: thinkChars, steps: stats.steps || 0, tool_calls: calls.length, tool_errors: toolErrors,
     tokens_out: stats.evalCount || 0, error: crashed, unverifiable, answer: (answer || "").slice(0, 1500), calls, empty_turns: emptyTurns, changes,
   };
 }
@@ -162,7 +166,7 @@ const outDir = path.join(ROOT, "bench-results");
 fs.mkdirSync(outDir, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
 const safeModel = settings.model.replace(/[^\w.-]+/g, "_");
-const outFile = path.join(outDir, `${stamp}_${safeModel}_think-${settings.think}_${suite}.json`);
+const outFile = path.join(outDir, `${stamp}_${safeModel}_think-${settings.think}${settings.quickFirstStep ? "-quick" : ""}_${suite}.json`);
 const fixtures = { dir: buildFixtures(), csvTotal: CSV_TOTAL };
 const run = { settings, started: new Date().toISOString(), repeat, results: [] };
 for (let i = tasks.length - 1; i >= 0; i--) {
@@ -191,6 +195,7 @@ for (let rep = 0; rep < repeat; rep++) {
 // ---------- summary ----------
 const R = run.results;
 const scored = R.filter((r) => r.status !== "unverifiable");
+const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
 const pct = (n, d) => (d ? `${Math.round((n / d) * 100)}%` : "–");
 const byCat = {};
 for (const r of R) (byCat[r.category] ||= []).push(r);
@@ -202,15 +207,16 @@ run.summary = {
   unverifiable: R.filter((r) => r.status === "unverifiable").length,
   errors: R.filter((r) => r.status === "error").length,
   avg_seconds: Math.round(R.reduce((a, r) => a + r.seconds, 0) / R.length),
+  median_first_action_s: median(R.map((r) => r.first_action_s).filter((x) => x != null)),
   by_category: Object.fromEntries(Object.entries(byCat).map(([c, rs]) => [c, { pass: rs.filter((r) => r.status === "pass").length, total: rs.length }])),
   by_level: Object.fromEntries([1, 2, 3].map((l) => [l, { pass: R.filter((r) => r.level === l && r.status === "pass").length, total: R.filter((r) => r.level === l).length }])),
 };
 fs.writeFileSync(outFile, JSON.stringify(run, null, 1));
 
 const md = [
-  `# Benchmark (${suite}): ${settings.model} (think=${settings.think})`,
+  `# Benchmark (${suite}): ${settings.model} (think=${settings.think}${settings.quickFirstStep ? ", quick first step" : ""})`,
   "",
-  `${run.started.slice(0, 16).replace("T", " ")} · ${R.length} task runs · avg ${run.summary.avg_seconds}s per task`,
+  `${run.started.slice(0, 16).replace("T", " ")} · ${R.length} task runs · avg ${run.summary.avg_seconds}s per task · median ${run.summary.median_first_action_s}s to first action`,
   "",
   `**Pass rate: ${pct(scored.filter((r) => r.status === "pass").length, scored.length)}** (all checks passed) · average check score ${Math.round(run.summary.avg_check_score * 100)}%` +
     (run.summary.unverifiable ? ` · ${run.summary.unverifiable} unverifiable` : "") + (run.summary.errors ? ` · ${run.summary.errors} errors/timeouts` : ""),
@@ -221,8 +227,8 @@ const md = [
   "| Difficulty | Passed |", "|---|---|",
   ...Object.entries(run.summary.by_level).filter(([, v]) => v.total).map(([l, v]) => `| ${"★".repeat(Number(l))} | ${v.pass}/${v.total} |`),
   "",
-  "| Task | Result | Score | Time | Steps | Failed checks |", "|---|---|---|---|---|---|",
-  ...R.map((r) => `| ${r.id} | ${icon[r.status]} ${r.status} | ${Math.round(r.score * 100)}% | ${r.seconds}s | ${r.steps} | ${r.checks.filter((c) => !c.pass).map((c) => c.name).join("; ").replace(/\|/g, "/") || "—"} |`),
+  "| Task | Result | Score | Time | First action | Steps | Failed checks |", "|---|---|---|---|---|---|---|",
+  ...R.map((r) => `| ${r.id} | ${icon[r.status]} ${r.status} | ${Math.round(r.score * 100)}% | ${r.seconds}s | ${r.first_action_s ?? "–"}s | ${r.steps} | ${r.checks.filter((c) => !c.pass).map((c) => c.name).join("; ").replace(/\|/g, "/") || "—"} |`),
   "",
 ].join("\n");
 fs.writeFileSync(outFile.replace(/\.json$/, ".md"), md);

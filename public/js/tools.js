@@ -75,6 +75,41 @@ const cellAddr = (row0, col0) => `${colLetter(col0)}${row0 + 1}`;
 
 const ERROR_RX = /^#(REF!|NAME\?|VALUE!|DIV\/0!|N\/A|NUM!|NULL!|SPILL!|CALC!)/;
 
+// Cells whose earlier content (value or formula) was replaced by something different.
+export function replacedCells(before, after, rowIndex, columnIndex, limit = 12) {
+  const cells = [];
+  let count = 0;
+  for (let r = 0; r < after.length; r++) {
+    for (let c = 0; c < after[r].length; c++) {
+      const was = before?.[r]?.[c];
+      if (was === "" || was == null) continue;
+      if (String(was) === String(after[r][c] ?? "")) continue;
+      count++;
+      if (cells.length < limit) cells.push({ cell: `${colLetter(columnIndex + c)}${rowIndex + r + 1}`, was });
+    }
+  }
+  return { count, cells };
+}
+
+// A "Total" label written directly above its formula in the same column — the value then sits a
+// row lower than intended, usually instead of label in column A and formula beside it.
+export function labelAboveTotal(data, rowIndex, columnIndex) {
+  for (let r = 0; r + 1 < data.length; r++) {
+    for (let c = 0; c < data[r].length; c++) {
+      const label = data[r][c];
+      const below = data[r + 1][c];
+      if (typeof label !== "string" || !/^\s*(grand\s+)?totals?\s*:?\s*$/i.test(label)) continue;
+      // Only the last written row, and only an aggregate: a "Total" header above per-row formulas is fine.
+      if (r + 1 !== data.length - 1 || rowIndex + r === 0) continue;
+      if (typeof below !== "string" || !/^=\s*(SUM|SUBTOTAL|AGGREGATE|SUMIFS?)\s*\(/i.test(below)) continue;
+      const at = (dr, dc) => `${colLetter(columnIndex + c + dc)}${rowIndex + r + dr + 1}`;
+      const left = c + columnIndex > 0 ? `put "${label.trim()}" in ${at(0, -1)} and the formula in ${at(0, 0)}` : "put the label to the left of the formula";
+      return `${at(0, 0)} has the label "${label.trim()}" and its formula is below it in ${at(1, 0)}, in the same column. If you meant a total row, ${left}, then clear ${at(1, 0)}.`;
+    }
+  }
+  return null;
+}
+
 function collectErrors(values, rowIndex, columnIndex, limit = 20) {
   const errs = [];
   values.forEach((row, r) =>
@@ -243,7 +278,8 @@ const tools = {
         target.load("address,formulas,numberFormat");
         ws.load("name");
         await context.sync();
-        ctx?.undo?.push({ sheet: ws.name, address: target.address.split("!").pop(), formulas: target.formulas });
+        const previous = target.formulas;
+        ctx?.undo?.push({ sheet: ws.name, address: target.address.split("!").pop(), formulas: previous });
 
         target.formulas = data;
         target.load("address,values,rowIndex,columnIndex");
@@ -253,6 +289,13 @@ const tools = {
         out.result_values = preview;
         const errs = collectErrors(target.values, target.rowIndex, target.columnIndex);
         if (errs.length) out.errors = errs;
+        const stacked = labelAboveTotal(data, target.rowIndex, target.columnIndex);
+        if (stacked) out.layout_warning = stacked;
+        const replaced = replacedCells(previous, data, target.rowIndex, target.columnIndex);
+        if (replaced.count) {
+          out.replaced_cells = replaced;
+          out.warning = `This replaced ${replaced.count} cell${replaced.count > 1 ? "s" : ""} that already had content (listed in replaced_cells with what was there). If you meant to add something new, you wrote over existing data: write it back, or Undo, and put the new cells in empty space (e.g. the first empty row below the data). If you meant to change them, carry on.`;
+        }
         return out;
       });
     },

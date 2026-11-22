@@ -4,11 +4,11 @@ Where Tally stands (2026-11-21) and what would make it better, most important fi
 
 | Area | Now | Goal |
 |---|---|---|
-| Accuracy | 97.5% on everyday tasks; reconciliation now 3 of 3 in 18–63 s (was 1 of 5, up to 12 min) | every hard task passes 3 of 3 |
+| Accuracy | 26 of 27 everyday tasks per run; the three tasks that slipped now pass 9 of 9; reconciliation 3 of 3 in 18–63 s | every hard task passes 3 of 3 |
 | Install | one line, but untested on a fresh Mac | tested on a clean macOS account |
 | Evidence | no outside users yet | 5 usability sessions done |
 | Reach | Mac with Apple silicon only | Windows |
-| Speed | seconds to minutes per task | quick answers for quick questions |
+| Speed | about 4–5 s to the first action, 45–51 s per task on average | quick answers for quick questions |
 
 ## 1. Reconciliation (done)
 
@@ -42,11 +42,19 @@ Needs a Windows machine with 32 GB of RAM and a GPU for testing.
 
 ## 5. Speed
 
-- For read-only questions ("what's the total in F?"), skip thinking on the first step and only think when a tool call fails.
-- Measure the time to the first useful action, not just the total.
+- **Measured (2026-11-22):** the benchmark now records the time to the first action and how much the model thinks. Median time to the first action is 5.3 s, and the average task takes 51 s.
+- **Tried:** skipping thinking on the first step (`quickFirstStep`, `--quick-first` in the benchmark). It produced 40% less thinking text, 45 s per task and 4.4 s to the first action, with the same pass rate. That's a single run each, so it's still off by default. Turn it on once a repeat run confirms it.
+- Quick questions are not slow because of thinking: the 4 analysis tasks took 32 s on average either way. The time goes into reading the sheet and writing the answer.
 - Keep a smaller model option for 16–24 GB Macs, labeled with its benchmark score.
+
+## Fixed on 2026-11-22
+
+- **A total written over the last data row.** `formulas-totals` once put its Total row on top of the Andes row. `write_range` now reports every non-empty cell it replaces (`replaced_cells`, with the old content), and the panel shows it under the tool card.
+- **A "Total" label above its sum, in the same column.** `clean-text-numbers` once wrote "Total" in B8 and the SUM in B9, then told the user A8/B8. `write_range` now returns a `layout_warning` with the fix. A "Total" column header above per-row formulas isn't flagged.
+- **An unreadable tool call ended the turn.** Ollama rejected a malformed call ("XML syntax error…") after the work was done, and the run crashed. The agent now asks the model to repeat the call, up to 2 times.
+- After these fixes, the three affected tasks passed 9 of 9 runs.
 
 ## Known weaknesses
 
-- When writing a row that starts with a label, the total can land one column off (CSV import, 2 of 3 runs once).
+- The label-in-the-wrong-column slip is now flagged, but not yet seen fixed by the model in a run where it happened (in the 9 re-runs, the model didn't make the slip).
 - The stand-in workbook can't evaluate spill references (`A2#`), so tasks that use them score pessimistically.

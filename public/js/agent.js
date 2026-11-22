@@ -17,7 +17,7 @@ You act on the user's open workbook through tools. Work like a careful senior an
 - Write whole blocks in one write_range call (2D array of rows) instead of cell-by-cell calls.
 - After writing formulas, check the returned result_values / errors; fix any #REF!, #NAME?, #VALUE! before finishing.
 - Make output look professional: bold headers, sensible number formats (#,##0 ; 0.0% ; $#,##0.00 ; yyyy-mm-dd), borders, autofit.
-- Don't overwrite existing data unless asked; if you need space, use an empty area or a new sheet and say where.
+- Don't overwrite existing data unless asked; if you need space, use an empty area or a new sheet and say where. A total row goes in the first EMPTY row below the last data row (check the used range), and its SUM must cover every data row. If write_range returns a warning (replaced cells you didn't mean to change) or a layout_warning, fix it before answering. Labels go to the LEFT of their value in the same row (A8 = "Total", B8 = =SUM(...)), not above it.
 - Use execute_office_js only when no other tool can do the job (conditional formatting, data validation, freeze panes, hide/group, etc.).
 - If a tool returns an error, read it, adjust, and retry (at most twice) before reporting the problem.
 - The user may attach screenshots or images (tables, charts, invoices, other spreadsheets, error messages). Read them carefully. When asked to put data from an image into the sheet, transcribe it exactly (numbers as numbers, keep the column order), write it in one write_range call, and then point out any value you couldn't read with certainty. If an image shows Excel formulas or errors, explain them in terms of this workbook.
@@ -130,6 +130,10 @@ function toOllamaMessage(m) {
   return msg;
 }
 
+export function isToolParseError(e) {
+  return /XML syntax error|error parsing tool call|failed to parse|unexpected end of JSON|invalid character/i.test(String(e?.message || ""));
+}
+
 function parseArgs(a) {
   if (typeof a !== "string") return a || {};
   try {
@@ -143,7 +147,8 @@ function parseArgs(a) {
  * Runs one user turn to completion.
  * @param {object} p
  * @param {Array} p.history         Ollama-format messages (mutated: new messages are appended)
- * @param {object} p.settings       { model, think, numCtx, temperature, maxSteps, approval }
+ * @param {object} p.settings       { model, think, numCtx, temperature, maxSteps, approval, quickFirstStep }
+ *                                  quickFirstStep: don't think on the first step (it usually just looks at the sheet)
  * @param {AbortSignal} p.signal
  * @param {object} p.ui             callbacks: step(), thinking(text), content(text), toolStart(call), toolEnd(call, result), approve(call) => Promise<bool>, stats(s)
  * @param {Array} p.undo            collects undo snapshots for this turn
@@ -151,6 +156,7 @@ function parseArgs(a) {
 export async function runTurn({ history, settings, signal, ui, undo }) {
   const totals = { evalCount: 0, evalNs: 0, promptCount: 0, steps: 0 };
   let emptyNudges = 0;
+  let parseRetries = 0;
   for (let step = 0; step < settings.maxSteps; step++) {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     totals.steps = step + 1;
@@ -160,16 +166,32 @@ export async function runTurn({ history, settings, signal, ui, undo }) {
       model: settings.model,
       messages: [{ role: "system", content: systemPrompt() }, ...history.map(toOllamaMessage)],
       tools: getToolDefinitions({ web: settings.web !== false }),
-      think: settings.think === "off" ? false : settings.think,
+      think: settings.think === "off" || (settings.quickFirstStep && step === 0) ? false : settings.think,
       keep_alive: "30m",
       options: { num_ctx: settings.numCtx, temperature: settings.temperature },
     };
 
-    const { msg, stats } = await streamChat(body, {
-      signal,
-      onThinking: (t) => stepUi.thinking(t),
-      onContent: (t) => stepUi.content(t),
-    });
+    let msg, stats;
+    try {
+      ({ msg, stats } = await streamChat(body, {
+        signal,
+        onThinking: (t) => stepUi.thinking(t),
+        onContent: (t) => stepUi.content(t),
+      }));
+    } catch (e) {
+      // Ollama rejects a tool call it can't parse (e.g. "XML syntax error … closed by </parameter>").
+      // That's one bad step, not a failed task: ask the model to make the call again.
+      if (e.name === "AbortError" || !isToolParseError(e) || parseRetries >= 2) throw e;
+      parseRetries++;
+      stepUi.empty?.({ doneReason: "unreadable tool call", thinkingTail: String(e.message).slice(0, 300) });
+      history.push({
+        role: "user",
+        _nudge: true,
+        content: "(Your last tool call couldn't be read: its format was broken. Make the call again with valid arguments.)",
+      });
+      stepUi.done();
+      continue;
+    }
     if (stats) {
       totals.evalCount += stats.eval_count || 0;
       totals.evalNs += stats.eval_duration || 0;

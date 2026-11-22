@@ -14,7 +14,7 @@
     "test:agent": "node scripts/test-agent.mjs",
     "stt-model": "mkdir -p models && curl -L --fail -o models/ggml-large-v3-turbo-q5_0.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
     "bench": "node scripts/bench/run.mjs",
-    "bench:selftest": "node scripts/lib/mock-fidelity.mjs && node scripts/bench/oracle.mjs && node scripts/test-agent-loop.mjs && node scripts/test-fill-down.mjs && node scripts/test-describe.mjs && node scripts/test-compare.mjs",
+    "bench:selftest": "node scripts/lib/mock-fidelity.mjs && node scripts/bench/oracle.mjs && node scripts/test-agent-loop.mjs && node scripts/test-fill-down.mjs && node scripts/test-describe.mjs && node scripts/test-compare.mjs && node scripts/test-write.mjs",
     "bench:hard": "node scripts/bench/run.mjs --suite hard"
   },
   "dependencies": {

@@ -26,6 +26,7 @@ globalThis.fetch = async (url, init) => {
     });
     return new Response(body, { status: 200 });
   }
+  if (msg.ollamaError) return new Response(JSON.stringify({ error: msg.ollamaError }) + "\n", { status: 200 });
   const line = JSON.stringify({ message: { role: "assistant", ...msg }, done: true, done_reason: "stop", eval_count: 5 }) + "\n";
   return new Response(line, { status: 200 });
 };
@@ -85,6 +86,25 @@ ok(r.answer === "Acted." && streamedChunks === 200 && requests.length === 1 && r
   let err = null;
   try { await runTurn({ history: [{ role: "user", content: "t" }], settings: { model: "m", think: "low", numCtx: 1024, temperature: 0, maxSteps: 3, approval: "none", web: false }, signal: ctl.signal, ui: stopUi, undo: [] }); } catch (e) { err = e; }
   ok(err?.name === "AbortError", "Stop by the user still aborts the turn");
+}
+
+// 7. Ollama can't parse a tool call: the step is retried instead of crashing the turn.
+const PARSE = "XML syntax error on line 11: element <function> closed by </parameter>";
+r = await run([{ ollamaError: PARSE }, { content: "Recovered." }]);
+ok(r.answer === "Recovered." && /couldn't be read/.test(requests[1].messages.at(-1).content), "an unreadable tool call is retried with a note to the model");
+
+// 8. …but not forever: a third parse error in a row is reported.
+{
+  let err = null;
+  try { await run([{ ollamaError: PARSE }, { ollamaError: PARSE }, { ollamaError: PARSE }, { content: "never" }]); } catch (e) { err = e; }
+  ok(/XML syntax error/.test(err?.message || ""), "gives up after 2 retries and reports the error");
+}
+
+// 9. Other Ollama errors still stop the turn.
+{
+  let err = null;
+  try { await run([{ ollamaError: "model not found" }]); } catch (e) { err = e; }
+  ok(/model not found/.test(err?.message || "") && requests.length === 1, "other errors are not retried");
 }
 
 console.log(bad ? `\n${bad} failed` : "\nall passed");
