@@ -17,11 +17,27 @@ MIN_OLLAMA="0.32.12"
 CHECK_ONLY=0
 DICTATION=0
 
+usage() {
+  cat <<'USAGE'
+Tally installer for macOS (Apple silicon + Microsoft Excel for Mac).
+
+  curl -fsSL https://raw.githubusercontent.com/joserbo97/tally-excel/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/joserbo97/tally-excel/main/install.sh | bash -s -- --check
+
+Options:
+  --check            only check this Mac, change nothing
+  --with-dictation   also set up local voice dictation (~600 MB)
+
+Safe to run again: every step skips what is already done.
+Settings (environment): TALLY_DIR (default ~/tally-excel), TALLY_MODEL (default qwen3.8).
+USAGE
+}
+
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
     --with-dictation) DICTATION=1 ;;
-    -h|--help) sed -n '2,12p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -46,6 +62,9 @@ else
   DIR="${TALLY_DIR:-$HOME/tally-excel}"
 fi
 
+# The steps live in main(), called on the last line: with `curl | bash`, nothing runs until the whole
+# script has downloaded, and no command can swallow the rest of the script from stdin.
+main() {
 # ---------------------------------------------------------------- 1. this Mac
 step "Checking this Mac"
 [ "$(uname -s)" = "Darwin" ] || fail "Tally runs on macOS only."
@@ -60,9 +79,24 @@ if [ "$free_gb" -ge 25 ]; then ok "${free_gb} GB free disk"; else warn "${free_g
 if [ -d "/Applications/Microsoft Excel.app" ]; then ok "Microsoft Excel is installed"
 else fail "Microsoft Excel for Mac isn't in /Applications. Install it first (Microsoft 365)."
 fi
-command -v brew >/dev/null 2>&1 && ok "Homebrew is installed" || fail "Homebrew is needed to install the tools. Install it from https://brew.sh, then run this again."
+# A fresh Homebrew install isn't on PATH until the shell profile is updated; find it in its usual places.
+if ! command -v brew >/dev/null 2>&1; then
+  for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$b" ] && eval "$("$b" shellenv)" && break; done
+fi
+command -v brew >/dev/null 2>&1 && ok "Homebrew is installed" || fail "Homebrew is needed to install the tools. Install it with the one-line command at https://brew.sh, then run this again."
 
 if [ "$CHECK_ONLY" = 1 ]; then
+  step "What the install would do"
+  todo() { if eval "$2" >/dev/null 2>&1; then ok "$1: already done"; else warn "$1: will be set up"; fi; }
+  todo "Git" "command -v git"
+  todo "Node.js 18 or later" "[ \"\$(node -p 'process.versions.node.split(\".\")[0]')\" -ge 18 ]"
+  todo "PDF reader (poppler)" "command -v pdftotext"
+  todo "Ollama" "command -v ollama || [ -d /Applications/Ollama.app ]"
+  todo "Model $MODEL (about 17 GB)" "curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags | grep -q '\"$MODEL[:\"]'"
+  todo "Tally files in $DIR" "[ -f '$DIR/manifest.xml' ]"
+  todo "Certificate for https://localhost (asks for your password)" "[ -f \"\$HOME/.office-addin-dev-certs/ca.crt\" ] && security verify-cert -c \"\$HOME/.office-addin-dev-certs/localhost.crt\""
+  todo "Tally registered with Excel" "[ -f \"\$HOME/Library/Containers/com.microsoft.Excel/Data/Documents/wef/tally.xml\" ]"
+  todo "Background server" "curl -fsk --max-time 2 https://localhost:3443/taskpane.html"
   step "Check finished: this Mac can run Tally. Nothing was changed."
   exit 0
 fi
@@ -161,3 +195,6 @@ echo "  2. Open a workbook and click Tally at the right end of the Home tab."
 echo "  If the button isn't there: Insert > Add-ins > My Add-ins > Developer Add-ins > Tally."
 [ "$DICTATION" = 1 ] || echo "  Voice dictation is optional: run ./install.sh --with-dictation in $DIR to add it."
 echo "  To remove Tally: $DIR/uninstall.sh"
+}
+
+main
