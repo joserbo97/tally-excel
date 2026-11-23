@@ -325,7 +325,8 @@ function toolCard(container, name, args, result) {
       const box = el("div", "approval");
       box.append(el("div", "why", esc(d.text)), el("div", "undo-note", esc(d.undo)));
       const btns = el("div", "btns");
-      const yes = el("button", "yes", esc(d.yes));
+      // Destructive steps (clear, delete, run code) get a red confirm button; green would read as "safe".
+      const yes = el("button", toolRisk(name) === "destructive" ? "yes danger" : "yes", esc(d.yes));
       const no = el("button", "", esc(d.no));
       btns.append(yes, no);
       box.append(btns);
