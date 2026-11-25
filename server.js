@@ -56,6 +56,14 @@ function serveStatic(req, res) {
     if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, "Forbidden");
   }
   fs.readFile(file, (err, data) => {
+    if (err?.code === "EPERM" || err?.code === "EACCES") {
+      // Seen after `brew upgrade node`: the running process outlives its deleted binary and macOS
+      // stops letting it read ~/Downloads. Exit so launchd (KeepAlive) restarts it on the new Node.
+      console.error(`Can't read ${file} (${err.code}). Restarting so the server runs on the current Node binary.`);
+      send(res, 503, "Tally is restarting. Reopen the panel in a few seconds.");
+      setTimeout(() => process.exit(1), 100);
+      return;
+    }
     if (err) return send(res, 404, "Not found");
     res.writeHead(200, {
       "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
